@@ -137,7 +137,7 @@ int main()
         twiddle_dpid[i] *= 1.1;
       } else {
         twiddle_pid[i] -= 2 * twiddle_dpid[i];
-        if (i != 2)
+        if (i != 1)
           twiddle_pid[i] = std::max<double>(twiddle_pid[i], 0);
         error = pid.get_i_error_l2_with_params(twiddle_pid[0], twiddle_pid[1], twiddle_pid[2]);
         if (error < best_error) {
