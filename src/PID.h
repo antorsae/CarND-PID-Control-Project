@@ -2,14 +2,14 @@
 #define PID_H
 
 #include <mutex>
-#include <condition_variable>
 
 class PID {
 private:
-  std::mutex * lock;
+  std::mutex lock;
   std::condition_variable cv;
   
   int REQ_CTE_OBSERVATIONS;
+  int IGNORE_FIRST_CTE_OBSERVATIONS;
   int cte_observations;
 
 public:
@@ -33,7 +33,7 @@ public:
   * Constructor
   */
   PID();
-  PID(int _REQ_CTE_OBSERVATIONS, std::mutex & _lock);
+  PID(int, float);
 
 
   /*
@@ -56,7 +56,7 @@ public:
   */
   double TotalError();
   
-  double get_i_error_l2() const;
+  double get_i_error_l2();
   
   double get_i_error_l2_with_params(double, double, double) ;
 

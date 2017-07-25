@@ -7,9 +7,8 @@
 #include <chrono>
 #include <thread>
 #include <mutex>
-#include "dlib/optimization/find_optimal_parameters.h"
-
-typedef dlib::matrix<double,0,1> column_vector;
+#include <limits>
+#include <algorithm>
 
 // for convenience
 using json = nlohmann::json;
@@ -39,34 +38,15 @@ float clip(float n, float lower, float upper) {
   return std::max(lower, std::min(n, upper));
 }
 
-PID * optimize_pid;
-
-double get_i_error_l2_pid(column_vector params) {
-  double Kp, Ti, Td, Ki, Kd;
-  Kp = params(0);
-  Ti = params(1);
-  Td = params(2);
-  Ki = Kp / Ti;
-  Kd = Kp * Td;
-  std::cout << "trying with " << Kp << " " << Ki << " " << Kd << std::endl;
-  double l2 = optimize_pid->get_i_error_l2_with_params(Kp, Ki, Kd);
-  std::cout << "got error " << l2 << std::endl;
-  return l2;
-
-}
-
 int main()
 {
   uWS::Hub h;
-  std::mutex lock;
   
-  const int REQ_CTE_OBSERVATIONS = 1000;
+  const int REQ_CTE_OBSERVATIONS = 1800;
 
-  PID pid(REQ_CTE_OBSERVATIONS, lock);
-  // TODO: Initialize the pid variable.
-  //pid.Init(0.4, 0.001, 0.2);
-
-  h.onMessage([&pid, &lock](uWS::WebSocket<uWS::SERVER> ws, char *data, size_t length, uWS::OpCode opCode) {
+  PID pid(REQ_CTE_OBSERVATIONS, 0.05);
+  
+  h.onMessage([&pid](uWS::WebSocket<uWS::SERVER> ws, char *data, size_t length, uWS::OpCode opCode) {
     // "42" at the start of the message means there's a websocket message event.
     // The 4 signifies a websocket message
     // The 2 signifies a websocket event
@@ -90,9 +70,6 @@ int main()
           pid.UpdateError(cte);
           double steer_value = clip(pid.TotalError(), -1, 1);
           
-          // DEBUG
-          //std::cout << "CTE: " << cte << " Steering Value: " << steer_value << std::endl;
-
           json msgJson;
           msgJson["steering_angle"] = steer_value;
           msgJson["throttle"] = 0.3;
@@ -144,35 +121,39 @@ int main()
   }
   auto handle = std::async([&]{h.run();});
   
-  //std::this_thread::sleep_for(std::chrono::milliseconds(1000*10));
-  
-  column_vector pid_params(3), pid_params_min(3), pid_params_max(3);
-  
-  pid_params_min = 0,    1,                          0;
-  pid_params     = 0.15, REQ_CTE_OBSERVATIONS/2,    50;
-  pid_params_max = 0.3,  REQ_CTE_OBSERVATIONS,     100;
+  std::vector<double> twiddle_pid  { 0.211576,  0.0005, 2.57 };
+  std::vector<double> twiddle_dpid { 0.05,      1e-4,   0.2  };
 
-  while (true) {
+  double twiddle_dpid_sum;
+  double best_error = std::numeric_limits<double>::max(), error;
+
+  do {
+    
+    for (int i = 0; i < 3; i++) {
+      twiddle_pid[i] += twiddle_dpid[i];
+      error = pid.get_i_error_l2_with_params(twiddle_pid[0], twiddle_pid[1], twiddle_pid[2]);
+      if (error < best_error) {
+        best_error = error;
+        twiddle_dpid[i] *= 1.1;
+      } else {
+        twiddle_pid[i] -= 2 * twiddle_dpid[i];
+        twiddle_pid[i] = std::max<double>(twiddle_pid[i], 0);
+        error = pid.get_i_error_l2_with_params(twiddle_pid[0], twiddle_pid[1], twiddle_pid[2]);
+        if (error < best_error) {
+          best_error = error;
+          twiddle_dpid[i] *= 1.1;
+        } else {
+          twiddle_pid[i] += twiddle_dpid[i];
+          twiddle_dpid[i] *= 0.9;
+        }
+      }
+      std::cout << "dpid " << twiddle_dpid[0] << " " << twiddle_dpid[1] << " "<< twiddle_dpid[2] << std::endl;
+    }
+    
+    twiddle_dpid_sum = twiddle_dpid[0] + twiddle_dpid[1] + twiddle_dpid[2];
+    
+  } while (twiddle_dpid_sum > 0.001);
   
-    //std::cout << "CTE L2 " << pid.get_i_error_l2() << std::endl;;
-    //pid.Init(0.4, 0.001, 0.2);
-    
-    optimize_pid = & pid;
-    
-    double cte2 = dlib::find_optimal_parameters (
-                                    1,
-                                    1e-2,
-                                    1e3,
-                                    pid_params,
-                                    pid_params_min,
-                                    pid_params_max,
-                                    get_i_error_l2_pid
-                                    );
-    
-    std::cout << cte2 << " with params " << pid_params << std::endl;
+  std::cout << "Out !" << std::endl;
 
-    //pid.Init(0., 0, 0.);
-
-  }
-  //h.run();
 }
