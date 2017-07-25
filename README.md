@@ -12,7 +12,7 @@ The PID controller controls a system using a feedback loop to get the cross-trac
 
 * P: Proportional -> The `P` parameter counteracts the error in the control loop with a signal inversely proportional to the instantaneous CTE. By itself, the `P` has a very obvious effect in our case, a high `P` makes the car steer abruptly to the center of the track but (because of the inertia) it overshoots and creates oscillations. Not a very comfortable car.
 * D: Derivative -> The `D` parameter counteracts the error in the control loop with a signal inversely proportional to the rate of change of the CTE. In our case, since we are implementing a digital and sequential PID controller, it we calculate the rate of change of the CTE by substracting `cte` from the current observation and the previous one. The main purpose of the `D` component is to model first-order dynamics in the car, and hence correct the overshooting of having the `P` parameter alone.
-* I: Integral -> The `I` parameter models potential bias in the overall loop (from control to sensors) with a signal inversely proportional to the accrued CTE. If we neglect this term the car
+* I: Integral -> The `I` parameter models potential bias in the overall loop (from control to sensors) with a signal inversely proportional to the accrued CTE. If we neglect this term the car still completes the lap but I believe it has a tendency to err to the right side. 
 
 ## Video
 

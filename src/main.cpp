@@ -121,7 +121,7 @@ int main()
   }
   auto handle = std::async([&]{h.run();});
   
-  std::vector<double> twiddle_pid  { 0.211576,  0.0005, 2.57 };
+  std::vector<double> twiddle_pid  { 0.211576,  0, 2.57 };
   std::vector<double> twiddle_dpid { 0.05,      1e-4,   0.2  };
 
   double twiddle_dpid_sum;
@@ -137,7 +137,8 @@ int main()
         twiddle_dpid[i] *= 1.1;
       } else {
         twiddle_pid[i] -= 2 * twiddle_dpid[i];
-        twiddle_pid[i] = std::max<double>(twiddle_pid[i], 0);
+        if (i != 1)
+          twiddle_pid[i] = std::max<double>(twiddle_pid[i], 0);
         error = pid.get_i_error_l2_with_params(twiddle_pid[0], twiddle_pid[1], twiddle_pid[2]);
         if (error < best_error) {
           best_error = error;
