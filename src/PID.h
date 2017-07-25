@@ -1,7 +1,17 @@
 #ifndef PID_H
 #define PID_H
 
+#include <mutex>
+#include <condition_variable>
+
 class PID {
+private:
+  std::mutex * lock;
+  std::condition_variable cv;
+  
+  int REQ_CTE_OBSERVATIONS;
+  int cte_observations;
+
 public:
   /*
   * Errors
@@ -9,6 +19,8 @@ public:
   double p_error;
   double i_error;
   double d_error;
+  
+  double i_error_l2;
 
   /*
   * Coefficients
@@ -16,11 +28,13 @@ public:
   double Kp;
   double Ki;
   double Kd;
-
+  
   /*
   * Constructor
   */
   PID();
+  PID(int _REQ_CTE_OBSERVATIONS, std::mutex & _lock);
+
 
   /*
   * Destructor.
@@ -41,6 +55,11 @@ public:
   * Calculate the total PID error.
   */
   double TotalError();
+  
+  double get_i_error_l2() const;
+  
+  double get_i_error_l2_with_params(double, double, double) ;
+
 };
 
 #endif /* PID_H */

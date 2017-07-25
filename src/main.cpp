@@ -3,6 +3,13 @@
 #include "json.hpp"
 #include "PID.h"
 #include <math.h>
+#include <future>
+#include <chrono>
+#include <thread>
+#include <mutex>
+#include "dlib/optimization/find_optimal_parameters.h"
+
+typedef dlib::matrix<double,0,1> column_vector;
 
 // for convenience
 using json = nlohmann::json;
@@ -32,15 +39,34 @@ float clip(float n, float lower, float upper) {
   return std::max(lower, std::min(n, upper));
 }
 
+PID * optimize_pid;
+
+double get_i_error_l2_pid(column_vector params) {
+  double Kp, Ti, Td, Ki, Kd;
+  Kp = params(0);
+  Ti = params(1);
+  Td = params(2);
+  Ki = Kp / Ti;
+  Kd = Kp * Td;
+  std::cout << "trying with " << Kp << " " << Ki << " " << Kd << std::endl;
+  double l2 = optimize_pid->get_i_error_l2_with_params(Kp, Ki, Kd);
+  std::cout << "got error " << l2 << std::endl;
+  return l2;
+
+}
+
 int main()
 {
   uWS::Hub h;
+  std::mutex lock;
+  
+  const int REQ_CTE_OBSERVATIONS = 1000;
 
-  PID pid;
+  PID pid(REQ_CTE_OBSERVATIONS, lock);
   // TODO: Initialize the pid variable.
-  pid.Init(0.20, 0.01, 0);
+  //pid.Init(0.4, 0.001, 0.2);
 
-  h.onMessage([&pid](uWS::WebSocket<uWS::SERVER> ws, char *data, size_t length, uWS::OpCode opCode) {
+  h.onMessage([&pid, &lock](uWS::WebSocket<uWS::SERVER> ws, char *data, size_t length, uWS::OpCode opCode) {
     // "42" at the start of the message means there's a websocket message event.
     // The 4 signifies a websocket message
     // The 2 signifies a websocket event
@@ -65,13 +91,13 @@ int main()
           double steer_value = clip(pid.TotalError(), -1, 1);
           
           // DEBUG
-          std::cout << "CTE: " << cte << " Steering Value: " << steer_value << std::endl;
+          //std::cout << "CTE: " << cte << " Steering Value: " << steer_value << std::endl;
 
           json msgJson;
           msgJson["steering_angle"] = steer_value;
           msgJson["throttle"] = 0.3;
           auto msg = "42[\"steer\"," + msgJson.dump() + "]";
-          std::cout << msg << std::endl;
+          //std::cout << msg << std::endl;
           ws.send(msg.data(), msg.length(), uWS::OpCode::TEXT);
         }
       } else {
@@ -116,5 +142,37 @@ int main()
     std::cerr << "Failed to listen to port" << std::endl;
     return -1;
   }
-  h.run();
+  auto handle = std::async([&]{h.run();});
+  
+  //std::this_thread::sleep_for(std::chrono::milliseconds(1000*10));
+  
+  column_vector pid_params(3), pid_params_min(3), pid_params_max(3);
+  
+  pid_params_min = 0,    1,                          0;
+  pid_params     = 0.15, REQ_CTE_OBSERVATIONS/2,    50;
+  pid_params_max = 0.3,  REQ_CTE_OBSERVATIONS,     100;
+
+  while (true) {
+  
+    //std::cout << "CTE L2 " << pid.get_i_error_l2() << std::endl;;
+    //pid.Init(0.4, 0.001, 0.2);
+    
+    optimize_pid = & pid;
+    
+    double cte2 = dlib::find_optimal_parameters (
+                                    1,
+                                    1e-2,
+                                    1e3,
+                                    pid_params,
+                                    pid_params_min,
+                                    pid_params_max,
+                                    get_i_error_l2_pid
+                                    );
+    
+    std::cout << cte2 << " with params " << pid_params << std::endl;
+
+    //pid.Init(0., 0, 0.);
+
+  }
+  //h.run();
 }
